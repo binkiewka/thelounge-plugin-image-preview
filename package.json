@@ -1,0 +1,30 @@
+{
+  "name": "thelounge-plugin-image-preview",
+  "version": "1.0.0",
+  "description": "An image and media preview plugin for The Lounge IRC client that overrides prefetch limits and handles known image hosting sites.",
+  "main": "index.js",
+  "author": "binkiewka",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/binkiewka/thelounge-plugin-image-preview.git"
+  },
+  "bugs": {
+    "url": "https://github.com/binkiewka/thelounge-plugin-image-preview/issues"
+  },
+  "homepage": "https://github.com/binkiewka/thelounge-plugin-image-preview#readme",
+  "thelounge": {
+    "name": "Image Preview",
+    "type": "plugin",
+    "supports": ">=4.0.0"
+  },
+  "keywords": [
+    "thelounge",
+    "thelounge-plugin",
+    "image-preview",
+    "irc",
+    "chat",
+    "media"
+  ],
+  "dependencies": {}
+}

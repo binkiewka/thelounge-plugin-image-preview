@@ -1,0 +1,23 @@
+/* Premium style enhancements for inline image previews */
+.toggle-content[data-type="image"] {
+    max-width: 500px;
+    margin-top: 5px;
+    border-radius: 8px;
+    border: 1px solid var(--window-border-color, rgba(255, 255, 255, 0.1));
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: inline-block;
+}
+
+.toggle-content[data-type="image"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+}
+
+.toggle-content[data-type="image"] img {
+    display: block;
+    max-height: 300px;
+    object-fit: cover;
+    border-radius: 6px;
+}
