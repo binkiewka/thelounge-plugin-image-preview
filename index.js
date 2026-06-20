@@ -2,6 +2,9 @@
 
 const path = require('path');
 const fs = require('fs');
+const { AsyncLocalStorage } = require('async_hooks');
+
+const prefetchStorageContext = new AsyncLocalStorage();
 
 // Helper to locate the running The Lounge installation directory
 function findTheLoungeDir() {
@@ -51,6 +54,69 @@ module.exports = {
         
         api.Logger.info(`Found The Lounge installation at: ${theloungeDir}`);
 
+        let pluginConfig;
+        let originalPrefetch = false;
+        let originalPrefetchStorage = false;
+        let originalPrefetchMaxImageSize = 2048;
+
+        try {
+            const configModule = require(path.join(theloungeDir, 'dist/server/config'));
+            originalPrefetch = configModule.default.values.prefetch;
+            originalPrefetchStorage = configModule.default.values.prefetchStorage;
+            originalPrefetchMaxImageSize = configModule.default.values.prefetchMaxImageSize;
+
+            const values = configModule.default.values;
+            Object.defineProperty(values, 'prefetch', {
+                get() {
+                    const ctx = prefetchStorageContext.getStore();
+                    if (ctx && ctx.prefetch !== undefined) {
+                        return ctx.prefetch;
+                    }
+                    return originalPrefetch;
+                },
+                set(val) {
+                    originalPrefetch = val;
+                },
+                configurable: true,
+                enumerable: true
+            });
+
+            Object.defineProperty(values, 'prefetchStorage', {
+                get() {
+                    const ctx = prefetchStorageContext.getStore();
+                    if (ctx && ctx.prefetchStorage !== undefined) {
+                        return ctx.prefetchStorage;
+                    }
+                    if (pluginConfig && pluginConfig.enabled && pluginConfig.prefetchStorage !== undefined) {
+                        return pluginConfig.prefetchStorage;
+                    }
+                    return originalPrefetchStorage;
+                },
+                set(val) {
+                    originalPrefetchStorage = val;
+                },
+                configurable: true,
+                enumerable: true
+            });
+
+            Object.defineProperty(values, 'prefetchMaxImageSize', {
+                get() {
+                    const ctx = prefetchStorageContext.getStore();
+                    if (ctx && ctx.maxImageSize !== undefined) {
+                        return ctx.maxImageSize;
+                    }
+                    return originalPrefetchMaxImageSize;
+                },
+                set(val) {
+                    originalPrefetchMaxImageSize = val;
+                },
+                configurable: true,
+                enumerable: true
+            });
+        } catch (e) {
+            api.Logger.error("Failed to patch configModule.default.values getters:", e);
+        }
+
         // Monkey-patch Express response prototype to allow image loading in CSP headers
         try {
             let express;
@@ -86,9 +152,11 @@ module.exports = {
         // Load configuration
         const configDir = api.Config.getPersistentStorageDir();
         const configPath = path.join(configDir, 'config.json');
-        let pluginConfig = {
+        pluginConfig = {
             enabled: true,
             maxImageSize: 2048, // in KB
+            prefetch: true, // allow this plugin to prefetch matched image/media links even when The Lounge prefetch is disabled
+            prefetchStorage: true, // enforce server-side image proxying/caching by default for privacy
             previewImgur: true,
             previewCatbox: true,
             previewGyazo: true,
@@ -111,6 +179,8 @@ module.exports = {
                 pluginConfig = {
                     enabled: data.enabled !== undefined ? data.enabled : true,
                     maxImageSize: data.maxImageSize !== undefined ? data.maxImageSize : 2048,
+                    prefetch: data.prefetch !== undefined ? data.prefetch : true,
+                    prefetchStorage: data.prefetchStorage !== undefined ? data.prefetchStorage : true,
                     previewImgur: data.previewImgur !== undefined ? data.previewImgur : true,
                     previewCatbox: data.previewCatbox !== undefined ? data.previewCatbox : true,
                     previewGyazo: data.previewGyazo !== undefined ? data.previewGyazo : true,
@@ -163,7 +233,6 @@ module.exports = {
         // 2. Monkey-patch Client.prototype.emit to filter/transform previews
         try {
             const Client = require(path.join(theloungeDir, 'dist/server/client')).default;
-            const configModule = require(path.join(theloungeDir, 'dist/server/config'));
             const originalEmit = Client.prototype.emit;
 
             Client.prototype.emit = function(event, data) {
@@ -183,14 +252,14 @@ module.exports = {
                             preview.media = preview.thumb;
                         } else {
                             // If global prefetch is disabled and we don't support the host, discard the preview
-                            if (!configModule.default.values.prefetch) {
+                            if (!originalPrefetch) {
                                 return;
                             }
                         }
                     } else {
                         // For other types (like standard link with no thumbnail, or error),
                         // discard if global prefetch is disabled
-                        if (!configModule.default.values.prefetch) {
+                        if (!originalPrefetch) {
                             return;
                         }
                     }
@@ -224,14 +293,13 @@ module.exports = {
         // 3. Monkey-patch the link module default export to intercept messages and trigger prefetch for images
         try {
             const linkModule = require(path.join(theloungeDir, 'dist/server/plugins/irc-events/link'));
-            const configModule = require(path.join(theloungeDir, 'dist/server/config'));
             const linkify = require(path.join(theloungeDir, 'dist/shared/linkify'));
             
             const originalLinkDefault = linkModule.default;
 
             linkModule.default = function(client, chan, msg, cleanText) {
                 // If global prefetch is enabled, let the original logic run normally
-                if (configModule.default.values.prefetch) {
+                if (originalPrefetch) {
                     return originalLinkDefault.apply(this, arguments);
                 }
 
@@ -240,25 +308,17 @@ module.exports = {
                     const links = linkify.findLinksWithSchema(cleanText);
                     const matchedLinks = links.filter(link => isImageUrlOrHost(link.link));
 
-                    if (matchedLinks.length > 0) {
+                    if (pluginConfig.prefetch && matchedLinks.length > 0) {
                         // Reconstruct message with only matching image links to avoid prefetching non-image links
                         const filteredText = matchedLinks.map(link => link.link).join(' ');
 
-                        // Temporarily enable prefetch and override limits for originalDefault execution
-                        const originalPrefetch = configModule.default.values.prefetch;
-                        const originalMaxImageSize = configModule.default.values.prefetchMaxImageSize;
-                        
-                        configModule.default.values.prefetch = true;
-                        if (pluginConfig.maxImageSize) {
-                            configModule.default.values.prefetchMaxImageSize = pluginConfig.maxImageSize;
-                        }
-
-                        try {
+                        return prefetchStorageContext.run({
+                            prefetch: pluginConfig.prefetch,
+                            prefetchStorage: pluginConfig.prefetchStorage,
+                            maxImageSize: pluginConfig.maxImageSize
+                        }, () => {
                             return originalLinkDefault.call(this, client, chan, msg, filteredText);
-                        } finally {
-                            configModule.default.values.prefetch = originalPrefetch;
-                            configModule.default.values.prefetchMaxImageSize = originalMaxImageSize;
-                        }
+                        });
                     }
                 }
             };
@@ -279,7 +339,7 @@ module.exports = {
                         client.sendMessage(`[Image Preview] Error updating config: ${e.message}`, context.chan);
                     }
                 } else if (sub === "status") {
-                    client.sendMessage(`[Image Preview] Plugin is ${pluginConfig.enabled ? "enabled" : "disabled"}. Max Image Size: ${pluginConfig.maxImageSize} KB. Supported sites check is active.`, context.chan);
+                    client.sendMessage(`[Image Preview] Plugin is ${pluginConfig.enabled ? "enabled" : "disabled"}. Prefetch: ${pluginConfig.prefetch ? "enabled" : "disabled"}. Prefetch storage: ${pluginConfig.prefetchStorage ? "enabled" : "disabled"}. Max Image Size: ${pluginConfig.maxImageSize} KB. Supported sites check is active.`, context.chan);
                 } else if (sub === "size" && args[1]) {
                     const newSize = parseInt(args[1], 10);
                     if (!isNaN(newSize) && newSize > 0) {

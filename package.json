@@ -1,6 +1,6 @@
 {
   "name": "thelounge-plugin-image-preview",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An image and media preview plugin for The Lounge IRC client that overrides prefetch limits and handles known image hosting sites.",
   "main": "index.js",
   "author": "binkiewka",

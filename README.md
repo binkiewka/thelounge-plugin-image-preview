@@ -8,7 +8,8 @@
 
 - **Direct Image Previews**: Automatically detects direct URLs (e.g. `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.svg`) and renders them inline.
 - **Image Host Support**: Supports major image hosts like Imgur, Catbox, Gyazo, Giphy, and Tenor.
-- **Custom Prefetch Bypass**: Operates independently of the server's global `prefetch: false` configuration to only prefetch images, protecting privacy and saving bandwidth.
+- **Custom Prefetch Bypass**: Operates independently of the server's global `prefetch: false` configuration to only prefetch matched image/media links, protecting privacy and saving bandwidth.
+- **Secure Preview Storage by Default**: Uses `prefetchStorage: true` by default so preview media is served through your Lounge server instead of exposing your browser to third-party image hosts.
 - **Configurable Settings**: Define a custom maximum image size limit and selectively toggle image hosts.
 - **Premium Styling**: Glassmorphic borders, nice rounding, and subtle hover transition effects.
 
@@ -64,7 +65,7 @@ If you have mounted The Lounge's configuration directory to a host path (e.g., `
 2. Manually add the dependency to `package.json` under `dependencies`:
    ```json
    "dependencies": {
-     "thelounge-plugin-image-preview": "^1.0.0"
+     "thelounge-plugin-image-preview": "^1.0.1"
    }
    ```
 3. Run npm install from your host (using Node.js matching the container's version) or simply restart the container—The Lounge's entrypoint will automatically install any missing dependencies listed in your `package.json`.
@@ -91,6 +92,8 @@ Custom configuration options can be adjusted in your persistent storage director
 {
   "enabled": true,
   "maxImageSize": 2048,
+  "prefetch": true,
+  "prefetchStorage": true,
   "previewImgur": true,
   "previewCatbox": true,
   "previewGyazo": true,
@@ -104,10 +107,9 @@ Custom configuration options can be adjusted in your persistent storage director
 
 ## Privacy & Security
 
-This plugin respects The Lounge's standard `prefetchStorage` security settings:
-
-* **With `prefetchStorage: true` (recommended for privacy)**: All image previews are fetched and stored/proxied by your Lounge server. Your browser loads the image directly from your own Lounge server, hiding your client IP address and user-agent from third-party sites.
-* **With `prefetchStorage: false` (default)**: The Lounge fetches initial metadata on the server, but the actual image is rendered via direct link inside your browser. This exposes your client IP address and user-agent to the third-party image host (e.g. Imgur, Google) when loading the preview.
+* **With `prefetch: true` (default)**: When The Lounge's global `prefetch` setting is disabled, this plugin temporarily enables prefetch only for matched image/media links.
+* **With `prefetchStorage: true` (default / recommended for privacy)**: Image previews are fetched and stored/proxied by your Lounge server. Your browser loads the image directly from your own Lounge server, hiding your client IP address and user-agent from third-party sites.
+* **With `prefetchStorage: false`**: The Lounge fetches initial metadata on the server, but the actual image is rendered via direct link inside your browser. This exposes your client IP address and user-agent to the third-party image host (e.g. Imgur, Google) when loading the preview.
 
 ---
 
