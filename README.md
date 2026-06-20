@@ -102,6 +102,15 @@ Custom configuration options can be adjusted in your persistent storage director
 
 ---
 
+## Privacy & Security
+
+This plugin respects The Lounge's standard `prefetchStorage` security settings:
+
+* **With `prefetchStorage: true` (recommended for privacy)**: All image previews are fetched and stored/proxied by your Lounge server. Your browser loads the image directly from your own Lounge server, hiding your client IP address and user-agent from third-party sites.
+* **With `prefetchStorage: false` (default)**: The Lounge fetches initial metadata on the server, but the actual image is rendered via direct link inside your browser. This exposes your client IP address and user-agent to the third-party image host (e.g. Imgur, Google) when loading the preview.
+
+---
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
